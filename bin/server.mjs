@@ -37,4 +37,4 @@ const connectDB = async () => {
 };
 startServer();
 
-connectDB();
+//connectDB();
