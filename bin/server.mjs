@@ -1,3 +1,4 @@
+import "dotenv/config";
 import mongoose from "mongoose";
 import app from "../app.mjs";
 
@@ -5,31 +6,35 @@ import ROLE from "../models/roleModel.mjs";
 import roleSeeder from "../seeders/roleSeeders.mjs";
 import seedUsers from "../seeders/creatorSeeder.mjs";
 
-import dotenv from "dotenv";
-dotenv.config();
 
-try {
-  await mongoose.connect(process.env.MONGO_URI);
-
-  /* POPULATE ROLES INTO DATABASE. */
-  const countRoles = await ROLE.countDocuments({});
-  
-  if ( countRoles == 0){
-    await roleSeeder();
-  } 
-
-  /* SEED DEFAULT USERS */
-  await seedUsers();
-
-
-  
-
-  const server = app.listen(process.env.PORT || 3000, () => {
-    const { port } = server.address();
-    console.log(`SERVER IS STARTING AT PORT ${port}`);
+const startServer = () => {
+  app.listen(process.env.PORT || 8080, () => {
+    console.log(`SERVER IS STARTING AT PORT ${process.env.PORT || 8080}`);
   });
-} catch (error) {
-  const { message } = error;
-  console.log(`DATABASE CONNECTION FAILED. ${message}`);
-  process.exit(1);
-}
+};
+
+const connectDB = async () => {
+  if (!process.env.MONGO_URI) {
+    console.log("MONGO_URI not set. Skipping DB connection.");
+    return;
+  }
+
+  try {
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log("MongoDB Connected");
+
+    /* POPULATE ROLES INTO DATABASE */
+    const countRoles = await ROLE.countDocuments({});
+    if (countRoles === 0) {
+      await roleSeeder();
+      console.log("Roles seeded");
+    }
+
+    await seedUsers();
+  } catch (error) {
+    console.error("DATABASE CONNECTION FAILED:", error.message);
+  }
+};
+startServer();
+
+connectDB();

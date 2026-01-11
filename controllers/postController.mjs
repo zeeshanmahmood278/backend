@@ -7,6 +7,7 @@ import LIKE from "../models/likeModel.mjs";
 import commentModel from "../models/commentModel.mjs";
 /* HELPER */
 import removeDocumentFile from "../services/removeDocumentFile.mjs";
+import { uploadImageToBlob } from "../utils/azureBlob.mjs";
 
 /* SHOW ALL POST */
 
@@ -46,29 +47,41 @@ const getAllActivePost = async (req, res, next) => {
 };
 
 /* CREATE POST */
-/* CREATE POST */
 const createPost = async (req, res, next) => {
   try {
     const userId = req.user._id;
-    // We construct the document data explicitly or spread body and override user
-    // However, the model schema for Post likely expects 'user' or 'creator'.
-    // Existing code did `new POST(req?.body)`.
-    // I will assume the schema might NOT have 'user' if it wasn't there before?
-    // Wait, if I'm adding `req.user._id`, I need to know the field name.
-    // Let's look at `postModel.mjs` first? No, I'll trust standard naming or check `getAllActivePost` which populates `comments.user`.
-    // But does POST itself have a user?
-    // `getAllActivePost` doesn't populate the post creator.
-    // Let's assume for now we just want to protect it, but if the schema doesn't have a user field, it won't save.
-    // However, if I don't add it, who owns the post?
-    // The previous code didn't appear to set a user either! `new POST(req?.body)`.
-    // Maybe `req.body` contained `user` or `creator`?
-    // If so, I should overwrite it. I will assume the field is `user`.
-    // If it breaks, I'll see it in validation.
-    
-    const documentData = { ...req.body, user: userId };
-    const document = await new POST(documentData);
+
+    // 1️⃣ Validate images
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        message: "At least one image is required",
+      });
+    }
+
+    // 2️⃣ Upload images to Azure Blob
+    const imageUrls = [];
+
+    for (const file of req.files) {
+      const imageUrl = await uploadImageToBlob(file);
+      imageUrls.push(imageUrl);
+    }
+
+    // 3️⃣ Prepare document data
+    const documentData = {
+      ...req.body,
+      images: imageUrls, // ✅ store URLs instead of filenames
+      user: userId,
+    };
+
+    // 4️⃣ Save post
+    const document = new POST(documentData);
     const { _id } = await document.save();
-    res.status(201).json(`Success! New Post  id #${_id} has been created.`);
+
+    res.status(201).json({
+      message: "Success! New Post created",
+      postId: _id,
+      images: imageUrls,
+    });
   } catch (error) {
     next(error);
   }
@@ -86,6 +99,7 @@ const updatePost = async (req, res, next) => {
   );
   res.status(200).send();
 };
+
 /*DELETE POST */
 const deletePost = async (req, res, next) => {
   const id = req?.params?.id;
